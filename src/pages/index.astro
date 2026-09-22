@@ -1,0 +1,31 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar';
+import Hero from '../components/Hero';
+import About from '../components/About';
+import Projects from '../components/Projects';
+import Skills from '../components/Skills';
+import Contact from '../components/Contact';
+import StarField from '../components/StarField';
+import AsteroidShooter from '../components/AsteroidShooter';
+import portfolio from '../data/portfolio.json';
+---
+
+<Layout>
+  <StarField client:load />
+  <AsteroidShooter client:load />
+  <Navbar client:load />
+  <main>
+    <Hero client:visible />
+    <About client:visible />
+    <Projects client:visible />
+    <Skills client:visible />
+    <Contact client:visible />
+  </main>
+
+  <footer style="padding: 3rem 2rem; text-align: center; border-top: 1px solid rgba(30, 41, 59, 0.3);">
+    <p style="font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: #64748b; letter-spacing: 0.1em;">
+      {portfolio.footer.text} | {portfolio.footer.builtWith}
+    </p>
+  </footer>
+</Layout>

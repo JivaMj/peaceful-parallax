@@ -1,0 +1,206 @@
+{
+  "personal": {
+    "name": "Javier Rodriguez",
+    "initials": "JR",
+    "title": "Ingeniero Electronico y Desarrollador Full Stack",
+    "description": "Desarrollador Full Stack con mas de 5 anos de experiencia creando aplicaciones web modernas y escalables. Mi pasion es transformar ideas en realidades digitales que impactan.",
+    "longDescription": "Soy un ingeniero Electrónico y Desarrollador Full Stack con más de cinco años de experiencia desarrollando aplicaciones web escalables utilizando TypeScript, React, Next.js, Node.js, Express y MySQL. Experiencia liderando desarrollo técnico, diseño de APIs REST, despliegues, integración de servicios como OpenAI, Twilio y Google OAuth, y coordinación de equipos multidisciplinarios.",
+    "avatar": "/assets/profile.png",
+    "email": "javierarr26@gmail.com",
+    "location": ""
+  },
+
+  "hero": {
+    "greeting": "Bienvenido a mi universo",
+    "cta": "Ver Proyectos",
+    "ctaSecondary": "Contactar"
+  },
+
+  "about": {
+    "heading": "Explorador Digital",
+    "stats": [
+      { "value": "5+", "label": "Anos exp." },
+      { "value": "5+", "label": "Proyectos" },
+      { "value": "3+", "label": "Empresas" }
+    ]
+  },
+
+  "projects": [
+    {
+      "id": "VV",
+      "title": "Viche vivo",
+      "description": "Una plataforma digital viva que fortalece la identidad cultural, protege el patrimonio territorial y conecta productores locales y transformadores con el mundo. Respaldada por la gobernación del valle, financiada por la CAF en alianza con la fundacion ACUA.",
+      "tech": ["React", "Next.js", "TypeScript", "Tailwind CSS", "Zustand", "Framer Motion", "Google cloud" , "Node.js", "Express", "MySQL"],
+      "color": "#7c3aed",
+      "year": "2025-2026",
+      "status": "COMPLETADO",
+      "url": "https://vichevivo.com",
+      "image": "/assets/vichevivo.png"
+    },
+    {
+      "id": "MF",
+      "title": "MasteryFive",
+      "description": "MasteryKids es un programa familiar gamificada donde tu hijo aprende jugando, gana misiones y conquista planetas junto a ti, Más hábitos. Más autonomia. Menos discusiones en casa.",
+      "tech": ["React", "Next.js", "TypeScript", "Tailwind CSS", "Zustand", "Framer Motion", "Google cloud" , "Node.js", "Express", "MySQL", "OpenAI"],
+      "color": "#06b6d4",
+      "year": "2025-2026",
+      "status": "COMPLETADO",
+      "url": "https://masteryfive.com/es",
+      "image": "/assets/masteryfive.png"
+    },
+    {
+      "id": "TP",
+      "title": "Trippio",
+      "description": "Herramienta web para la creacion y gestion de itinerarios de viaje personalizados, utilizando inteligencia artificial para generar recomendaciones basadas en preferencias del usuario.",
+      "tech": ["React", "Next.js", "TypeScript", "Tailwind CSS", "Zustand", "Framer Motion", "Google cloud" , "Node.js", "Express", "MySQL", "OpenAi", "Mapbox", "Twilio"],
+      "color": "#10b981",
+      "year": "2024-2025",
+      "status": "COMPLETADO",
+      "url": "",
+      "image": null
+    },
+    {
+      "id": "IL",
+      "title": "Web Imagen Latina",
+      "description": "App web estilo red social para la captacion de publico y transmision de contenido digital.",
+      "tech": ["React", "TypeScript", "Redux", "Firebase"],
+      "color": "#f59e0b",
+      "year": "2022",
+      "status": "COMPLETADO",
+      "url": "",
+      "image": null
+    },
+    {
+      "id": "AT",
+      "title": "Taxis app",
+      "description": "Aplicación completa para servicio de taxis que incluye app móvil para conductores y pasajeros, con seguimiento de posición en tiempo real y dashboard administrativo.",
+      "tech": ["React Native", "Socket.IO", "Node.js", "MySQL", "Express"],
+      "color": "#f19FFb",
+      "year": "2022",
+      "status": "COMPLETADO",
+      "url": "",
+      "image": null
+    },
+    {
+      "id": "TP",
+      "title": "Temple",
+      "description": "Proyecto personal: Vitrina web para la venta de productos y/o prestacion de servicios, con pasarela de pago y panel administrativo para la gestion de pedidos y clientes.",
+      "tech": ["Next.js", "Node.js", "PostgreSQL", "Stripe", "Tailwind CSS"],
+      "color": "#A50a0F",
+      "year": "2026",
+      "status": "ACTIVO",
+      "url": "https://tiendascienaga.netlify.app/",
+      "image": null
+    }
+  ],
+
+  "skills": {
+    "categories": [
+      {
+        "id": "frontend",
+        "label": "Frontend",
+        "icon": "◆",
+        "color": "#7c3aed",
+        "skills": [
+          { "name": "React", "level": 90, "xp": "9.0k", "icon": "⚛" },
+          { "name": "TypeScript", "level": 95, "xp": "9.5k", "icon": "TS" },
+          { "name": "Next.js", "level": 85, "xp": "8.5k", "icon": "N" },
+          { "name": "Tailwind CSS", "level": 90, "xp": "9.0k", "icon": "◈" },
+          { "name": "React Native", "level": 78, "xp": "7.8k", "icon": "📱" },
+          { "name": "Astro", "level": 82, "xp": "8.2k", "icon": "🚀" }
+        ]
+      },
+      {
+        "id": "backend",
+        "label": "Backend",
+        "icon": "⬡",
+        "color": "#06b6d4",
+        "skills": [
+          { "name": "Node.js", "level": 90, "xp": "9.0k", "icon": "⬡" },
+          { "name": "Python", "level": 52, "xp": "5.2k", "icon": "Python" },
+          { "name": "PostgreSQL", "level": 86, "xp": "8.6k", "icon": "PG" },
+          { "name": "MongoDB", "level": 80, "xp": "8.0k", "icon": "🍃" },
+          { "name": "GraphQL", "level": 55, "xp": "5.5k", "icon": "GQL" },
+          { "name": "REST APIs", "level": 92, "xp": "9.2k", "icon": "⚡" }
+        ]
+      },
+      {
+        "id": "devops",
+        "label": "Despliegue",
+        "icon": "▲",
+        "color": "#10b981",
+        "skills": [
+          { "name": "Docker", "level": 84, "xp": "8.4k", "icon": "🐳" },
+          { "name": "AWS", "level": 78, "xp": "7.8k", "icon": "AWS" },
+          { "name": "Google Cloud", "level": 92, "xp": "9.2k", "icon": "GCP" },
+          { "name": "CI/CD", "level": 88, "xp": "8.8k", "icon": "⟳" },
+          { "name": "Vercel", "level": 90, "xp": "9.0k", "icon": "▲" },
+          { "name": "Linux", "level":682, "xp": "6.2k", "icon": "🐧" }
+        ]
+      },
+      {
+        "id": "mobile",
+        "label": "Movil",
+        "icon": "◎",
+        "color": "#f59e0b",
+        "skills": [
+          { "name": "React Native", "level": 85, "xp": "8.5k", "icon": "⚛" },
+          { "name": "Expo", "level": 80, "xp": "8.0k", "icon": "△" },
+          { "name": "Flutter", "level": 48, "xp": "4.8k", "icon": "F" },
+          { "name": "iOS/Swift", "level": 25, "xp": "2.5k", "icon": "" },
+          { "name": "Android/Kotlin", "level": 30, "xp": "3.0k", "icon": "🤖" },
+          { "name": "PWA", "level": 28, "xp": "2.8k", "icon": "◎" }
+        ]
+      }
+    ]
+  },
+
+  "contact": {
+    "heading": "Inicia tu Mision",
+    "description": "Tienes un proyecto en mente? Me encantaria escuchar tu idea. Juntos podemos crear algo extraordinario.",
+    "formLabels": {
+      "name": "Nombre",
+      "email": "Email",
+      "message": "Mensaje",
+      "namePlaceholder": "Tu nombre",
+      "emailPlaceholder": "tu@email.com",
+      "messagePlaceholder": "Cuentame sobre tu proyecto...",
+      "submit": "Enviar Mensaje"
+    }
+  },
+
+  "social": [
+    { "name": "GitHub", "url": "https://github.com/JivaMJ " },
+    { "name": "LinkedIn", "url": "www.linkedin.com/in/javier-alberto-rodriguez-rodriguez" }
+  ],
+
+  "navigation": [
+    { "label": "Inicio", "href": "#hero" },
+    { "label": "Sobre mi", "href": "#about" },
+    { "label": "Proyectos", "href": "#projects" },
+    { "label": "Habilidades", "href": "#skills" },
+    { "label": "Contacto", "href": "#contact" }
+  ],
+
+  "seo": {
+    "title": "Javier Rodriguez | Desarrollador Full Stack",
+    "description": "Portafolio de Javier Rodriguez - Ingeniero Electronico y Desarrollador Full Stack especializado en React, TypeScript, Node.js y arquitecturas modernas.",
+    "keywords": "desarrollador web, portfolio, full stack, frontend, backend, react, typescript, node.js",
+    "ogImage": "/og-image.png",
+    "siteUrl": "https://tu-sitio.com",
+    "locale": "es_ES",
+    "type": "website"
+  },
+
+  "settings": {
+    "gameEnabled": false
+  },
+
+  "projectsHeading": "Misiones Espaciales",
+  "skillsHeading": "Arsenal Tecnologico",
+
+  "footer": {
+    "text": "2026 Javier Rodriguez.",
+    "builtWith": "Construido con Astro + React + Three.js + TypeScript"
+  }
+}
