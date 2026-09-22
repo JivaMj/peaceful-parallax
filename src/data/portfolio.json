@@ -158,6 +158,11 @@
   "contact": {
     "heading": "Inicia tu Mision",
     "description": "Tienes un proyecto en mente? Me encantaria escuchar tu idea. Juntos podemos crear algo extraordinario.",
+    "formspreeId": "xdekgqwy",
+    "whatsapp": {
+      "phone": "573002445806",
+      "message": "Hola, me interesa tu perfil para trabajar juntos"
+    },
     "formLabels": {
       "name": "Nombre",
       "email": "Email",

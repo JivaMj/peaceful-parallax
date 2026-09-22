@@ -1,11 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import portfolio from '../data/portfolio.json';
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= breakpoint);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function Projects() {
   const [visible, setVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [glitching, setGlitching] = useState(false);
   const ref = useRef<HTMLElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -58,66 +70,75 @@ export default function Projects() {
           </h2>
         </div>
 
-        {/* 3-column layout: selector | visualization | info */}
-        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 280px', gap: '1.5rem', alignItems: 'start' }}>
+        {/* Responsive layout: 3-column desktop, stacked mobile */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr 280px', gap: '1.5rem', alignItems: 'start' }}>
 
-          {/* LEFT: Project selector - spaceship cockpit style */}
+          {/* LEFT: Project selector - horizontal scroll on mobile */}
           <div style={{
             background: 'rgba(10, 10, 26, 0.8)',
             border: '1px solid rgba(124, 58, 237, 0.2)',
             borderRadius: '12px',
-            padding: '1rem 0.75rem',
+            padding: isMobile ? '0.75rem' : '1rem 0.75rem',
             position: 'relative',
+            order: isMobile ? 0 : 0,
+            ...(isMobile ? { overflowX: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
           }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, #7c3aed, transparent)' }} />
-            <p style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '0.6rem', color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem', textAlign: 'center' }}>
-              Seleccion de misión
-            </p>
-            {projects.map((p, index) => {
-              const isActive = selectedIndex === index;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => handleSelect(index)}
-                  aria-pressed={isActive}
-                  style={{
-                    width: '100%',
-                    padding: '0.7rem 0.8rem',
-                    background: isActive ? `${p.color}15` : 'transparent',
-                    border: `1px solid ${isActive ? `${p.color}50` : 'rgba(30, 41, 59, 0.3)'}`,
-                    borderRadius: '8px',
-                    color: isActive ? '#e2e8f0' : '#64748b',
-                    fontFamily: "'Orbitron', sans-serif",
-                    fontSize: '0.65rem',
-                    letterSpacing: '0.05em',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    textAlign: 'left',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    marginBottom: '0.4rem',
-                  }}
-                >
-                  <span style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: isActive ? p.color : '#334155',
-                    boxShadow: isActive ? `0 0 8px ${p.color}` : 'none',
-                    flexShrink: 0,
-                  }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.title}
-                  </span>
-                </button>
-              );
-            })}
-            <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(30, 41, 59, 0.3)', borderRadius: '6px', textAlign: 'center' }}>
-              <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '0.55rem', color: '#64748b', letterSpacing: '0.15em' }}>
-                {selectedIndex + 1} / {projects.length} MISIONES
-              </span>
+            {!isMobile && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, #7c3aed, transparent)' }} />}
+            {!isMobile && (
+              <p style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '0.6rem', color: '#64748b', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem', textAlign: 'center' }}>
+                Seleccion de misión
+              </p>
+            )}
+            <div style={isMobile ? { display: 'flex', gap: '0.4rem' } : {}}>
+              {projects.map((p, index) => {
+                const isActive = selectedIndex === index;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelect(index)}
+                    aria-pressed={isActive}
+                    style={{
+                      padding: isMobile ? '0.5rem 0.8rem' : '0.7rem 0.8rem',
+                      background: isActive ? `${p.color}15` : 'transparent',
+                      border: `1px solid ${isActive ? `${p.color}50` : 'rgba(30, 41, 59, 0.3)'}`,
+                      borderRadius: '8px',
+                      color: isActive ? '#e2e8f0' : '#64748b',
+                      fontFamily: "'Orbitron', sans-serif",
+                      fontSize: isMobile ? '0.6rem' : '0.65rem',
+                      letterSpacing: '0.05em',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginBottom: isMobile ? 0 : '0.4rem',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: isActive ? p.color : '#334155',
+                      boxShadow: isActive ? `0 0 8px ${p.color}` : 'none',
+                      flexShrink: 0,
+                    }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.title}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            {!isMobile && (
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(30, 41, 59, 0.3)', borderRadius: '6px', textAlign: 'center' }}>
+                <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '0.55rem', color: '#64748b', letterSpacing: '0.15em' }}>
+                  {selectedIndex + 1} / {projects.length} MISIONES
+                </span>
+              </div>
+            )}
           </div>
 
           {/* CENTER: Main visualization with scanlines */}
@@ -127,7 +148,8 @@ export default function Projects() {
             borderRadius: '16px',
             position: 'relative',
             overflow: 'hidden',
-            minHeight: '450px',
+            minHeight: isMobile ? 'auto' : '450px',
+            order: isMobile ? 1 : 1,
           }}>
             {/* Top HUD bar */}
             <div style={{
@@ -182,7 +204,7 @@ export default function Projects() {
 
             {/* Content */}
             <div style={{
-              padding: '2rem',
+              padding: isMobile ? '1.25rem' : '2rem',
               position: 'relative',
               zIndex: 1,
               opacity: glitching ? 0.3 : 1,
@@ -310,7 +332,8 @@ export default function Projects() {
             </div>
           </div>
 
-          {/* RIGHT: Info panel */}
+          {/* RIGHT: Info panel - hidden on mobile */}
+          {!isMobile && (
           <div style={{
             background: 'rgba(10, 10, 26, 0.8)',
             border: '1px solid rgba(30, 41, 59, 0.4)',
@@ -379,6 +402,7 @@ export default function Projects() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
 

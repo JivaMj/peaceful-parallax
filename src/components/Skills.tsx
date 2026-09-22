@@ -9,11 +9,23 @@ function getLevelBadge(level: number): { label: string; color: string } {
   return { label: 'APRENDIZ', color: '#64748b' };
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= breakpoint);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function Skills() {
   const [visible, setVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('frontend');
   const [animatedLevels, setAnimatedLevels] = useState<Record<string, number>>({});
   const ref = useRef<HTMLElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -80,11 +92,12 @@ export default function Skills() {
           display: 'flex',
           gap: '0.4rem',
           marginBottom: '2rem',
-          justifyContent: 'center',
+          justifyContent: isMobile ? 'flex-start' : 'center',
           padding: '0.5rem',
           background: 'rgba(10, 10, 26, 0.6)',
           borderRadius: '12px',
           border: '1px solid rgba(30, 41, 59, 0.4)',
+          ...(isMobile ? { overflowX: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
         }}>
           {skillCategories.map((cat) => {
             const isActive = activeTab === cat.id;
@@ -109,6 +122,7 @@ export default function Skills() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
+                  flexShrink: 0,
                 }}
               >
                 <span style={{ fontSize: '0.9rem' }}>{cat.icon}</span>
@@ -128,8 +142,8 @@ export default function Skills() {
             hidden={activeTab !== cat.id}
             style={{
               display: activeTab === cat.id ? 'grid' : 'none',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: '1rem',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: isMobile ? '0.75rem' : '1rem',
             }}
           >
             {cat.skills.map((skill, i) => {
