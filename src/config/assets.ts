@@ -47,6 +47,18 @@ export const ASSETS = {
 
     /** Sonido de game over */
     gameOver: '/audio/gameover.mp3',
+
+    /** Aparicion del boss virus */
+    virusSpawn: '/audio/virus-spawn.mp3',
+
+    /** Infeccion de una seccion */
+    corrupt: '/audio/corrupt.mp3',
+
+    /** Reparacion de una seccion */
+    repair: '/audio/repair.mp3',
+
+    /** Derrota del boss */
+    bossDeath: '/audio/boss-death.mp3',
   },
 } as const;
 
@@ -56,6 +68,10 @@ export const DEFAULT_VOLUMES = {
   shoot: 0.5,
   explosion: 0.6,
   gameOver: 0.7,
+  virusSpawn: 0.6,
+  corrupt: 0.5,
+  repair: 0.5,
+  bossDeath: 0.7,
 } as const;
 
 /** Helper para cargar una imagen de forma segura */

@@ -198,7 +198,8 @@
   },
 
   "settings": {
-    "gameEnabled": false
+    "gameEnabled": false,
+    "virusEnabled": true
   },
 
   "projectsHeading": "Misiones Espaciales",

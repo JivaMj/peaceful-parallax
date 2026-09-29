@@ -1,6 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import portfolio from '../data/portfolio.json';
 
+type SkillItem = {
+  name: string;
+  level: number;
+  xp: string;
+  icon: string;
+  /** Imagen opcional del skill (si no existe se muestra el icono de texto) */
+  image?: string | null;
+};
+
+type SkillCategory = {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  skills: SkillItem[];
+};
+
 function getLevelBadge(level: number): { label: string; color: string } {
   if (level >= 90) return { label: 'MAESTRO', color: '#f59e0b' };
   if (level >= 80) return { label: 'EXPERTO', color: '#22c55e' };
@@ -38,7 +55,7 @@ export default function Skills() {
 
   useEffect(() => {
     if (!visible) return;
-    const skillCategories = portfolio.skills.categories;
+    const skillCategories: SkillCategory[] = portfolio.skills.categories;
     const activeCat = skillCategories.find((c) => c.id === activeTab);
     if (!activeCat) return;
 
@@ -55,7 +72,7 @@ export default function Skills() {
     return () => timers.forEach(clearTimeout);
   }, [activeTab, visible]);
 
-  const skillCategories = portfolio.skills.categories;
+  const skillCategories: SkillCategory[] = portfolio.skills.categories;
 
   return (
     <section

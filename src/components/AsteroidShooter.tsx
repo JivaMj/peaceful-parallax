@@ -2,6 +2,25 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { ASSETS, loadImage } from '../config/assets';
 import { audioManager } from '../config/audio';
 import portfolio from '../data/portfolio.json';
+import {
+  corruptionStore,
+  useCorruptionState,
+  SECTION_ORDER,
+  revealSection,
+} from '../config/corruption';
+import {
+  VIRUS_CONFIG,
+  PHASE_COLORS,
+  createBoss,
+  phaseForHp,
+  updateBossPosition,
+  spawnMinions,
+  updateMinion,
+  drawBoss,
+  drawMinion,
+  type Boss,
+  type Minion,
+} from '../game/virus';
 
 const GAME_STORAGE_KEY = 'space-portfolio-game-active';
 
@@ -46,6 +65,7 @@ interface Explosion {
 }
 
 interface ShipDamage {
+  id: number;
   x: number;
   y: number;
   particles: { x: number; y: number; vx: number; vy: number; life: number }[];
@@ -83,10 +103,10 @@ const DIFFICULTIES: DifficultyConfig[] = [
   { id: 'extreme',  label: 'EXTREME',   shortLabel: 'XTM', color: '#ef4444', collision: true,  safeZone: false, speedMult: 1.6, maxLives: 1, spawnRateBase: 120, spawnRateMin: 40  },
 ];
 
-const WEAPONS: { id: WeaponType; label: string; icon: string; color: string }[] = [
-  { id: 'basic',   label: 'BASICA',    icon: '•',  color: '#06b6d4' },
-  { id: 'bounce',  label: 'REBOTE',    icon: '◊',  color: '#10b981' },
-  { id: 'minigun', label: 'MINIGUN',   icon: '⫸', color: '#f59e0b' },
+const WEAPONS: { id: WeaponType; label: string; shortLabel: string; icon: string; color: string }[] = [
+  { id: 'basic',   label: 'BASICA',    shortLabel: 'BAS', icon: '•',  color: '#06b6d4' },
+  { id: 'bounce',  label: 'REBOTE',    shortLabel: 'REB', icon: '◊',  color: '#10b981' },
+  { id: 'minigun', label: 'MINIGUN',   shortLabel: 'MIN', icon: '⫸', color: '#f59e0b' },
 ];
 
 const ASTEROID_COLORS = ['#7c3aed', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
@@ -96,6 +116,18 @@ const SHIP_SPEED = 4;
 const MAX_BOUNCE = 3;
 const POWERUP_INTERVAL_MIN = 500;
 const POWERUP_INTERVAL_MAX = 2000;
+
+/** Lluvia matrix: daño critico y derrota del medidor */
+const DAMAGE_CRITICAL_PCT = 80;
+const DAMAGE_LOSE_PCT = 100;
+const MATRIX_CHARS = 'ｱｲｳｴｵｶｷｸｹｺﾊﾋﾌﾍﾎ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ<>=*:.';
+
+interface RainCol {
+  rx: number;
+  y: number;
+  speed: number;
+  chars: string[];
+}
 
 let nextId = 0;
 const getId = () => ++nextId;
@@ -143,6 +175,27 @@ export default function AsteroidShooter() {
   const [settingsHover, setSettingsHover] = useState(false);
   const gameActiveRef = useRef(gameActive);
 
+  // ─── Virus boss mode ───
+  const bossRef = useRef<Boss | null>(null);
+  const minionsRef = useRef<Minion[]>([]);
+  const damageStepRef = useRef(0);
+  const virusActiveRef = useRef(false);
+  const virusLostRef = useRef(false);
+  const bannerTimerRef = useRef<number | null>(null);
+  const rainRef = useRef<Record<string, RainCol[]>>({});
+  const [virusActive, setVirusActive] = useState(false);
+  const [virusLost, setVirusLost] = useState(false);
+  const [bossHp, setBossHp] = useState(0);
+  const [virusPhase, setVirusPhase] = useState<1 | 2 | 3>(1);
+  const [virusBanner, setVirusBanner] = useState<'intro' | 'victory' | null>(null);
+  const corruption = useCorruptionState();
+  const infectionPct = Math.round(
+    (SECTION_ORDER.reduce((sum, id) => sum + corruption[id], 0) /
+      (SECTION_ORDER.length * 3)) *
+      100
+  );
+  const virusEnabled = portfolio.settings.virusEnabled !== false;
+
   const getDiffConfig = useCallback(() => {
     return DIFFICULTIES.find((d) => d.id === difficultyRef.current)!;
   }, []);
@@ -170,6 +223,20 @@ export default function AsteroidShooter() {
     damageRef.current = [];
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
+    // Virus: limpieza total al reiniciar (sin onda de reparacion)
+    bossRef.current = null;
+    minionsRef.current = [];
+    damageStepRef.current = 0;
+    virusActiveRef.current = false;
+    virusLostRef.current = false;
+    setVirusActive(false);
+    setVirusLost(false);
+    setBossHp(0);
+    setVirusPhase(1);
+    setVirusBanner(null);
+    rainRef.current = {};
+    if (bannerTimerRef.current) window.clearTimeout(bannerTimerRef.current);
+    corruptionStore.reset();
     setScore(0);
     setCombo(0);
     setLives(config.maxLives);
@@ -327,6 +394,10 @@ export default function AsteroidShooter() {
     const muted = audioManager.toggleMute('shoot');
     audioManager.setMute('explosion', muted);
     audioManager.setMute('gameOver', muted);
+    audioManager.setMute('virusSpawn', muted);
+    audioManager.setMute('corrupt', muted);
+    audioManager.setMute('repair', muted);
+    audioManager.setMute('bossDeath', muted);
     setMutedFx(muted);
   }, []);
 
@@ -338,9 +409,95 @@ export default function AsteroidShooter() {
     });
   }, []);
 
+  const showBanner = useCallback((kind: 'intro' | 'victory', ms: number) => {
+    setVirusBanner(kind);
+    if (bannerTimerRef.current) window.clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = window.setTimeout(() => setVirusBanner(null), ms);
+  }, []);
+
+  /** Abortar/limpiar modo virus. repair=true → onda de reparacion escalonada */
+  const deactivateVirus = useCallback((repair: boolean) => {
+    virusActiveRef.current = false;
+    virusLostRef.current = false;
+    setVirusActive(false);
+    setVirusLost(false);
+    bossRef.current = null;
+    minionsRef.current = [];
+    damageStepRef.current = 0;
+    rainRef.current = {};
+    setBossHp(0);
+    setVirusPhase(1);
+    setVirusBanner(null);
+    if (bannerTimerRef.current) window.clearTimeout(bannerTimerRef.current);
+    if (repair) corruptionStore.repairAll(true);
+    else corruptionStore.reset();
+  }, []);
+
+  const activateVirus = useCallback(() => {
+    // Si hay un game over pendiente, reiniciar antes de empezar la pelea
+    if (gameOverRef.current) resetGame();
+    if (!gameActiveRef.current) {
+      gameActiveRef.current = true;
+      setGameActive(true);
+      try {
+        localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(true));
+      } catch {}
+    }
+    // Limpiar modo normal para empezar la pelea
+    asteroidsRef.current = [];
+    powerupsRef.current = [];
+    corruptionStore.reset();
+    damageStepRef.current = 0;
+    minionsRef.current = [];
+    rainRef.current = {};
+    virusLostRef.current = false;
+    setVirusLost(false);
+    const w = canvasRef.current?.width || window.innerWidth;
+    const h = canvasRef.current?.height || window.innerHeight;
+    bossRef.current = createBoss(w, h);
+    setBossHp(VIRUS_CONFIG.maxHp);
+    setVirusPhase(1);
+    virusActiveRef.current = true;
+    setVirusActive(true);
+    initAudio();
+    audioManager.play('virusSpawn');
+    revealSection('hero');
+    showBanner('intro', 3200);
+  }, [initAudio, showBanner, resetGame]);
+
+  const toggleVirus = useCallback(() => {
+    if (virusActiveRef.current) deactivateVirus(true);
+    else activateVirus();
+  }, [activateVirus, deactivateVirus]);
+
+  useEffect(() => {
+    virusActiveRef.current = virusActive;
+  }, [virusActive]);
+
   useEffect(() => {
     gameActiveRef.current = gameActive;
-  }, [gameActive]);
+    // Apagar el juego mientras el virus esta activo → abortar la pelea
+    if (!gameActive && virusActiveRef.current) deactivateVirus(true);
+  }, [gameActive, deactivateVirus]);
+
+  // Derrota: el medidor de daño llego al 100% (pagina destruida)
+  useEffect(() => {
+    if (virusActive && !virusLost && infectionPct >= DAMAGE_LOSE_PCT) {
+      virusLostRef.current = true;
+      setVirusLost(true);
+      minionsRef.current = [];
+      audioManager.play('gameOver');
+      audioManager.pauseBackground();
+    }
+  }, [virusActive, virusLost, infectionPct]);
+
+  /** Pantalla de derrota: repara todo y reinicia la pelea del virus */
+  const repairAndRetry = useCallback(() => {
+    virusLostRef.current = false;
+    setVirusLost(false);
+    resetGame();
+    activateVirus();
+  }, [resetGame, activateVirus]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -425,6 +582,215 @@ export default function AsteroidShooter() {
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
 
+    /**
+     * Huecos void: trozos del contenido de secciones corruptas que "desaparecen"
+     * (dibujados en el canvas por encima del DOM). Cambian cada ~20 frames y
+     * respeta las zonas del HUD para no tapar la barra de vida ni el score.
+     * scroll-aware: usa getBoundingClientRect cada frame.
+     */
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const drawCorruptionVoids = () => {
+      if (prefersReduced || gameOverRef.current || virusLostRef.current) return;
+      const corrupt = corruptionStore.getState();
+      const w = canvas.width;
+      const h = canvas.height;
+      const bucket = Math.floor(frameRef.current / 20);
+
+      const idSeed: Record<string, number> = { hero: 11, about: 23, projects: 37, skills: 53, contact: 71 };
+      const rand = (i: number, seed: number) => {
+        const x = Math.sin((bucket * 97 + i * 31 + seed) * 12.9898) * 43758.5453;
+        return x - Math.floor(x);
+      };
+
+      // Zonas que nunca se cubren (HUD virus centrado, HUD score derecha, panel settings izq.)
+      const zones = [
+        { x: w / 2 - 250, y: 0, w: 500, h: 195 },
+        { x: w - 260, y: 0, w: 260, h: 370 },
+        { x: 0, y: h / 2 - 170, w: 245, h: 340 },
+      ];
+      const hits = (x: number, y: number, cw: number, ch: number) =>
+        zones.some((z) => x < z.x + z.w && x + cw > z.x && y < z.y + z.h && y + ch > z.y);
+
+      for (const id of SECTION_ORDER) {
+        const lvl = corrupt[id];
+        if (lvl === 0) continue;
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const top = Math.max(0, r.top);
+        const bottom = Math.min(h, r.bottom);
+        const left = Math.max(0, r.left);
+        const right = Math.min(w, r.right);
+        if (bottom - top < 60 || right - left < 60) continue;
+        const seed = idSeed[id] || 7;
+
+        // Huecos void (contenido borrado)
+        const chunkCount = lvl === 1 ? 2 : lvl === 2 ? 5 : 9;
+        for (let i = 0; i < chunkCount; i++) {
+          const cw = (right - left) * (0.06 + rand(i, seed) * (0.09 + lvl * 0.05));
+          const ch = (bottom - top) * (0.025 + rand(i + 50, seed) * (0.04 + lvl * 0.03));
+          const cx = left + rand(i + 100, seed) * Math.max(1, right - left - cw);
+          const cy = top + rand(i + 150, seed) * Math.max(1, bottom - top - ch);
+          if (hits(cx, cy, cw, ch)) continue;
+
+          ctx.save();
+          ctx.fillStyle = '#0a0a1a';
+          ctx.fillRect(cx, cy, cw, ch);
+          ctx.strokeStyle = `rgba(34, 197, 94, ${0.25 + lvl * 0.15})`;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx, cy, cw, ch);
+          // Pixeles de "pudricion" en los bordes
+          const specks = 4 + lvl * 3;
+          ctx.fillStyle = '#22c55e';
+          for (let s = 0; s < specks; s++) {
+            const sx = cx + rand(i * 13 + s + 200, seed) * cw;
+            const sy = cy + (rand(i * 17 + s + 260, seed) < 0.5 ? 0 : ch - 2);
+            ctx.globalAlpha = 0.5 + rand(i + s + 300, seed) * 0.5;
+            ctx.fillRect(sx, sy, 2 + rand(s + 400, seed) * 3, 2);
+          }
+          ctx.restore();
+        }
+
+        // Bandas de ruido glitch (nivel 2+)
+        if (lvl >= 2) {
+          const bands = lvl === 2 ? 1 : 3;
+          for (let b = 0; b < bands; b++) {
+            if (lvl === 2 && rand(b + 500, seed) < 0.4) continue;
+            const by = top + rand(b + 550, seed) * (bottom - top);
+            const bh = 6 + rand(b + 600, seed) * 16;
+            if (by < 200 && right > w / 2 - 250 && left < w / 2 + 250) continue;
+            const cols = ['#22c55e', '#f0abfc', '#06b6d4', '#ef4444'];
+            const segs = 6 + Math.floor(rand(b + 650, seed) * 10);
+            const segW = (right - left) / segs;
+            ctx.save();
+            for (let sIdx = 0; sIdx < segs; sIdx++) {
+              if (rand(b * 100 + sIdx + 700, seed) < 0.55) continue;
+              ctx.globalAlpha = 0.15 + rand(b + sIdx + 750, seed) * 0.4;
+              ctx.fillStyle = cols[(sIdx + b) % cols.length];
+              ctx.fillRect(left + sIdx * segW + rand(sIdx + 800, seed) * 6, by, segW, bh);
+            }
+            ctx.restore();
+          }
+        }
+      }
+    };
+
+    /**
+     * Lluvia matrix: glifos verde neón cayendo sobre cada seccion corrupta
+     * (coordenadas relativas a la seccion → scrollea con ella).
+     * Mas rapida/intensa cuanto mas alto es el nivel y en estado critico.
+     */
+    const drawMatrixRain = () => {
+      if (prefersReduced || gameOverRef.current || virusLostRef.current) return;
+      const corrupt = corruptionStore.getState();
+      const h = canvas.height;
+      const total = SECTION_ORDER.reduce((s, id) => s + corrupt[id], 0);
+      const crit = Math.round((total / (SECTION_ORDER.length * 3)) * 100) >= DAMAGE_CRITICAL_PCT;
+
+      const randChar = () => MATRIX_CHARS[(Math.random() * MATRIX_CHARS.length) | 0];
+
+      for (const id of SECTION_ORDER) {
+        const lvl = corrupt[id];
+        if (lvl === 0) {
+          if (rainRef.current[id]) delete rainRef.current[id];
+          continue;
+        }
+
+        let columns = rainRef.current[id];
+        if (!columns) {
+          columns = [];
+          const COUNT = 16;
+          for (let i = 0; i < COUNT; i++) {
+            columns.push({
+              rx: (i + 0.5 + (Math.random() - 0.5) * 0.7) / COUNT,
+              y: Math.random(),
+              speed: 0.0022 + Math.random() * 0.003,
+              chars: Array.from({ length: 12 }, randChar),
+            });
+          }
+          rainRef.current[id] = columns;
+        }
+
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const viewTop = Math.max(0, r.top);
+        const viewBottom = Math.min(h, r.bottom);
+        if (viewBottom - viewTop < 40 || r.width < 40) continue;
+
+        const fs = 15;
+        const lineH = fs + 4;
+        const intensity = (0.4 + lvl * 0.2) * (crit ? 1.35 : 1);
+        const speedMul = (1 + lvl * 0.3) * (crit ? 1.6 : 1);
+
+        ctx.save();
+        ctx.font = `700 ${fs}px 'Courier New', monospace`;
+        ctx.textAlign = 'center';
+
+        for (const col of columns) {
+          col.y += col.speed * speedMul;
+          if (col.y > 1.25) {
+            col.y = -0.08 - Math.random() * 0.2;
+            for (let c = 0; c < col.chars.length; c++) col.chars[c] = randChar();
+          } else if (Math.random() < 0.15) {
+            col.chars[(Math.random() * col.chars.length) | 0] = randChar();
+          }
+
+          const x = r.left + col.rx * r.width;
+          const headY = r.top + col.y * r.height;
+
+          for (let t = 0; t < col.chars.length; t++) {
+            const py = headY - t * lineH;
+            // Dentro de la seccion y del viewport
+            if (py < Math.max(r.top, viewTop) - lineH || py > Math.min(r.bottom, viewBottom)) continue;
+            if (py < r.top || py > r.bottom) continue;
+            if (t === 0) {
+              ctx.fillStyle = `rgba(234, 255, 234, ${Math.min(1, intensity)})`;
+              ctx.shadowColor = '#4ade80';
+              ctx.shadowBlur = 8;
+            } else {
+              const a = (1 - t / col.chars.length) * intensity;
+              ctx.fillStyle = `rgba(74, 222, 128, ${a.toFixed(3)})`;
+              ctx.shadowBlur = 0;
+            }
+            ctx.fillText(col.chars[t], x, py);
+          }
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    };
+
+    /** Victoria: explosion grande, reparacion total escalonada y banner */
+    const bossDefeated = (boss: Boss) => {
+      const particles = [];
+      const count = 34;
+      for (let j = 0; j < count; j++) {
+        const a = (Math.PI * 2 * j) / count + Math.random() * 0.6;
+        const sp = 1.5 + Math.random() * 4;
+        particles.push({
+          x: boss.x,
+          y: boss.y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life: 1,
+          color: j % 3 === 0 ? '#f0abfc' : j % 3 === 1 ? '#22c55e' : '#f8fafc',
+        });
+      }
+      explosionsRef.current.push({ id: getId(), x: boss.x, y: boss.y, particles });
+      audioManager.play('bossDeath');
+      scoreRef.current += 500;
+      setScore(scoreRef.current);
+      corruptionStore.repairAll(true);
+      minionsRef.current = [];
+      bossRef.current = null;
+      damageStepRef.current = 0;
+      setBossHp(0);
+      virusActiveRef.current = false;
+      setVirusActive(false);
+      showBanner('victory', 4200);
+    };
+
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       frameRef.current++;
@@ -432,20 +798,26 @@ export default function AsteroidShooter() {
       const config = getDiffConfig();
       const keys = keysRef.current;
 
+      // Huecos void + lluvia matrix de las secciones corruptas (debajo de nave/boss)
+      drawCorruptionVoids();
+      drawMatrixRain();
+
       if (!gameOverRef.current && gameActiveRef.current) {
         spawnTimerRef.current++;
 
-        // Spawn asteroids
-        const spawnRate = Math.max(config.spawnRateMin, config.spawnRateBase - Math.floor(scoreRef.current / 50));
-        if (spawnTimerRef.current >= spawnRate) {
-          spawnAsteroid(canvas);
-          spawnTimerRef.current = 0;
-        }
+        if (!virusActiveRef.current) {
+          // Spawn asteroids
+          const spawnRate = Math.max(config.spawnRateMin, config.spawnRateBase - Math.floor(scoreRef.current / 50));
+          if (spawnTimerRef.current >= spawnRate) {
+            spawnAsteroid(canvas);
+            spawnTimerRef.current = 0;
+          }
 
-        // Spawn powerups
-        if (scoreRef.current >= nextPowerupRef.current) {
-          spawnPowerup(canvas);
-          nextPowerupRef.current = scoreRef.current + POWERUP_INTERVAL_MIN + Math.random() * (POWERUP_INTERVAL_MAX - POWERUP_INTERVAL_MIN);
+          // Spawn powerups
+          if (scoreRef.current >= nextPowerupRef.current) {
+            spawnPowerup(canvas);
+            nextPowerupRef.current = scoreRef.current + POWERUP_INTERVAL_MIN + Math.random() * (POWERUP_INTERVAL_MAX - POWERUP_INTERVAL_MIN);
+          }
         }
 
         // Update invincibility
@@ -571,7 +943,7 @@ export default function AsteroidShooter() {
       }
 
       // Draw safe zone border
-      if (config.safeZone && !gameOverRef.current) {
+      if (config.safeZone && !gameOverRef.current && !virusActiveRef.current) {
         ctx.save();
         ctx.strokeStyle = 'rgba(6, 182, 212, 0.15)';
         ctx.lineWidth = 1;
@@ -762,6 +1134,161 @@ export default function AsteroidShooter() {
         return true;
       });
 
+      // ─── VIRUS BOSS: update, infeccion, minions y combate ───
+      if (virusActiveRef.current && bossRef.current) {
+        const boss = bossRef.current;
+
+        const newPhase = phaseForHp(boss.hp, boss.maxHp);
+        if (newPhase !== boss.phase) {
+          boss.phase = newPhase;
+          setVirusPhase(newPhase);
+        }
+
+        // Movimiento scroll-aware: persigue el centro de su seccion objetivo
+        updateBossPosition(boss, frameRef.current, canvas.width, canvas.height);
+
+        if (!boss.entering && !gameOverRef.current && !virusLostRef.current) {
+          const conf = VIRUS_CONFIG.phases[boss.phase];
+
+          // Timer de ataque → infectar siguiente seccion (ciclica)
+          boss.attackTimer--;
+          if (boss.attackTimer <= 0) {
+            const infected = corruptionStore.infectNext();
+            if (infected) {
+              boss.targetSection = infected;
+              revealSection(infected);
+              audioManager.play('corrupt');
+            }
+            boss.attackTimer = conf.attackInterval;
+          }
+
+          // Timer de invocacion → minions glitch
+          boss.summonTimer--;
+          if (boss.summonTimer <= 0) {
+            const room = VIRUS_CONFIG.maxMinions - minionsRef.current.length;
+            const count = Math.min(conf.minionCount, Math.max(0, room));
+            if (count > 0) {
+              minionsRef.current.push(...spawnMinions(boss, count));
+            }
+            boss.summonTimer = conf.summonInterval;
+          }
+
+          // Proyectiles vs boss
+          for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+            const p = projectilesRef.current[i];
+            const dx = p.x - boss.x;
+            const dy = p.y - boss.y;
+            if (Math.sqrt(dx * dx + dy * dy) < VIRUS_CONFIG.radius + 8) {
+              projectilesRef.current.splice(i, 1);
+              boss.hp = Math.max(0, boss.hp - 1);
+              boss.hitFlash = 6;
+              scoreRef.current += 5;
+              setScore(scoreRef.current);
+              setBossHp(boss.hp);
+
+              // Reparacion hibrida: cada N golpes se empuja un nivel de infeccion
+              damageStepRef.current++;
+              if (damageStepRef.current >= VIRUS_CONFIG.damagePerStep) {
+                damageStepRef.current = 0;
+                if (corruptionStore.repairMost()) {
+                  audioManager.play('repair');
+                }
+              }
+
+              if (boss.hp <= 0) {
+                bossDefeated(boss);
+                break;
+              }
+            }
+          }
+        }
+
+        // Minions: persiguen la nave, colisionan y mueren a disparos
+        if (bossRef.current && !virusLostRef.current) {
+          minionsRef.current = minionsRef.current.filter((m) => {
+            updateMinion(m, ship.x, ship.y);
+
+            const mdx = ship.x - m.x;
+            const mdy = ship.y - m.y;
+            const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+
+            if (
+              config.collision &&
+              invincibleRef.current <= 0 &&
+              !gameOverRef.current &&
+              mdist < SHIP_RADIUS + VIRUS_CONFIG.minionRadius
+            ) {
+              if (shieldRef.current > 0) {
+                shieldRef.current = 0;
+                setShield(false);
+              } else {
+                loseLife();
+              }
+              const zap = [];
+              const zcount = 8;
+              for (let j = 0; j < zcount; j++) {
+                const a = (Math.PI * 2 * j) / zcount;
+                zap.push({
+                  x: m.x,
+                  y: m.y,
+                  vx: Math.cos(a) * (1 + Math.random() * 2),
+                  vy: Math.sin(a) * (1 + Math.random() * 2),
+                  life: 1,
+                  color: '#f0abfc',
+                });
+              }
+              explosionsRef.current.push({ id: getId(), x: m.x, y: m.y, particles: zap });
+              audioManager.play('explosion');
+              return false;
+            }
+
+            for (let i = projectilesRef.current.length - 1; i >= 0; i--) {
+              const p = projectilesRef.current[i];
+              const pdx = p.x - m.x;
+              const pdy = p.y - m.y;
+              if (Math.sqrt(pdx * pdx + pdy * pdy) < VIRUS_CONFIG.minionRadius + 6) {
+                projectilesRef.current.splice(i, 1);
+                m.hp--;
+                if (m.hp <= 0) {
+                  audioManager.play('explosion');
+                  const parts = [];
+                  const count = 6 + Math.floor(Math.random() * 4);
+                  for (let j = 0; j < count; j++) {
+                    const a = (Math.PI * 2 * j) / count + Math.random() * 0.5;
+                    parts.push({
+                      x: m.x,
+                      y: m.y,
+                      vx: Math.cos(a) * (1 + Math.random() * 2),
+                      vy: Math.sin(a) * (1 + Math.random() * 2),
+                      life: 1,
+                      color: j % 2 ? '#f0abfc' : '#ef4444',
+                    });
+                  }
+                  explosionsRef.current.push({ id: getId(), x: m.x, y: m.y, particles: parts });
+                  comboRef.current++;
+                  scoreRef.current += 10 * comboRef.current;
+                  setScore(scoreRef.current);
+                  setCombo(comboRef.current);
+                  setTimeout(() => {
+                    comboRef.current = 0;
+                    setCombo(0);
+                  }, 2000);
+                  return false;
+                }
+                break;
+              }
+            }
+
+            drawMinion(ctx, m, frameRef.current);
+            return true;
+          });
+        }
+
+        if (bossRef.current) {
+          drawBoss(ctx, bossRef.current, frameRef.current, ship.x, ship.y);
+        }
+      }
+
       // Update & draw powerups
       powerupsRef.current = powerupsRef.current.filter((pu) => {
         pu.rotation += 0.02;
@@ -899,10 +1426,11 @@ export default function AsteroidShooter() {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
     };
-  }, [shoot, spawnAsteroid, spawnPowerup, loseLife, getDiffConfig, initAudio, cycleWeapon]);
+  }, [shoot, spawnAsteroid, spawnPowerup, loseLife, getDiffConfig, initAudio, cycleWeapon, showBanner]);
 
   const currentDiff = DIFFICULTIES.find((d) => d.id === difficulty)!;
   const currentWeapon = WEAPONS.find((w) => w.id === weapon)!;
+  const damageCrit = virusActive && infectionPct >= DAMAGE_CRITICAL_PCT;
 
   return (
     <>
@@ -1019,6 +1547,32 @@ export default function AsteroidShooter() {
                 </button>
               </div>
             </div>
+
+            {/* Virus boss toggle */}
+            {virusEnabled && (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontFamily: "'Orbitron', sans-serif", fontSize: '0.5rem', letterSpacing: '0.12em', color: '#cbd5e1' }}>VIRUS</span>
+                  <button
+                    onClick={toggleVirus}
+                    aria-label={virusActive ? 'Detener el virus' : 'Activar el boss virus'}
+                    style={{
+                      padding: '0.2rem 0.5rem',
+                      background: virusActive ? 'rgba(239, 68, 68, 0.2)' : 'rgba(100, 116, 139, 0.2)',
+                      border: `1px solid ${virusActive ? 'rgba(239, 68, 68, 0.5)' : 'rgba(100, 116, 139, 0.4)'}`,
+                      borderRadius: '4px',
+                      fontFamily: "'Orbitron', sans-serif",
+                      fontSize: '0.5rem',
+                      color: virusActive ? '#ef4444' : '#94a3b8',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {virusActive ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Divider */}
             <div style={{ height: '1px', background: 'rgba(30, 41, 59, 0.5)', marginBottom: '0.75rem' }} />
@@ -1246,6 +1800,285 @@ export default function AsteroidShooter() {
             </div>
           </div>
 
+          {/* Virus HUD - barra de vida del boss + medidor de daño (scroll-aware) */}
+          {virusActive && !virusLost && (
+            <div style={{
+              position: 'fixed',
+              top: '1.2rem',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 10000,
+              pointerEvents: 'none',
+              width: 'min(440px, 74vw)',
+              textAlign: 'center',
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '0.55rem',
+                letterSpacing: '0.25em',
+                color: PHASE_COLORS[virusPhase],
+                marginBottom: '0.35rem',
+                textShadow: `0 0 10px ${PHASE_COLORS[virusPhase]}66`,
+              }}>
+                VIRUS.EXE // FASE {virusPhase}
+              </div>
+
+              {/* Barra de vida del boss (segmentada) */}
+              <div style={{
+                position: 'relative',
+                height: '14px',
+                background: 'rgba(10, 10, 26, 0.85)',
+                border: '1px solid rgba(30, 41, 59, 0.8)',
+                borderRadius: '3px',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: `${(bossHp / VIRUS_CONFIG.maxHp) * 100}%`,
+                  background: `linear-gradient(90deg, #22c55e, ${PHASE_COLORS[virusPhase]})`,
+                  transition: 'width 0.15s ease',
+                  boxShadow: `0 0 12px ${PHASE_COLORS[virusPhase]}80`,
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'repeating-linear-gradient(90deg, transparent 0 21px, rgba(10, 10, 26, 0.9) 21px 23px)',
+                }} />
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '0.3rem',
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '0.45rem',
+                color: '#64748b',
+                letterSpacing: '0.12em',
+              }}>
+                <span>HP {bossHp}/{VIRUS_CONFIG.maxHp}</span>
+                <span>GOLPES/REP: {damageStepRef.current}/{VIRUS_CONFIG.damagePerStep}</span>
+              </div>
+
+              {/* Medidor de DAÑO: critico al 80%, derrota al 100% */}
+              <div style={{
+                position: 'relative',
+                marginTop: '0.35rem',
+                height: '8px',
+                background: 'rgba(10, 10, 26, 0.85)',
+                border: `1px solid ${damageCrit ? 'rgba(239, 68, 68, 0.8)' : 'rgba(30, 41, 59, 0.6)'}`,
+                borderRadius: '2px',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${infectionPct}%`,
+                  background: damageCrit
+                    ? 'linear-gradient(90deg, #ef4444, #ff1744)'
+                    : 'linear-gradient(90deg, #f59e0b, #ef4444)',
+                  transition: 'width 0.3s ease',
+                  animation: damageCrit ? 'critBlink 0.7s steps(2) infinite' : 'none',
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'repeating-linear-gradient(90deg, transparent 0 9px, rgba(10, 10, 26, 0.5) 9px 10px)',
+                  zIndex: 1,
+                }} />
+                {/* Marca de critico al 80% */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: `${DAMAGE_CRITICAL_PCT}%`,
+                  width: '2px',
+                  height: '100%',
+                  background: 'rgba(255, 255, 255, 0.9)',
+                  zIndex: 2,
+                }} />
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '0.25rem',
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: damageCrit ? '0.5rem' : '0.45rem',
+                letterSpacing: '0.18em',
+                color: damageCrit ? '#ef4444' : '#94a3b8',
+                animation: damageCrit ? 'critLabel 0.7s steps(2) infinite' : 'none',
+              }}>
+                <span>{damageCrit ? '⚠ DAÑO CRITICO' : 'DAÑO'} {infectionPct}%</span>
+                <span style={{ color: '#475569' }}>MAX 100%</span>
+              </div>
+
+              {/* Chips por seccion: nivel + click para hacer scroll hasta ella */}
+              <div style={{
+                display: 'flex',
+                gap: '0.35rem',
+                justifyContent: 'center',
+                marginTop: '0.45rem',
+                pointerEvents: 'auto',
+                flexWrap: 'wrap',
+              }}>
+                {SECTION_ORDER.map((id) => {
+                  const lvl = corruption[id];
+                  const col = lvl >= 3 ? '#ef4444' : lvl === 2 ? '#f59e0b' : lvl === 1 ? '#facc15' : '#334155';
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => revealSection(id)}
+                      aria-label={`Ir a la seccion ${id} (infeccion nivel ${lvl})`}
+                      title="Click para ir a la seccion"
+                      style={{
+                        background: lvl > 0 ? `${col}22` : 'rgba(30, 41, 59, 0.3)',
+                        border: `1px solid ${lvl > 0 ? `${col}66` : 'rgba(30, 41, 59, 0.5)'}`,
+                        borderRadius: '3px',
+                        padding: '0.15rem 0.35rem',
+                        fontFamily: "'Orbitron', sans-serif",
+                        fontSize: '0.42rem',
+                        letterSpacing: '0.1em',
+                        color: col,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {id.slice(0, 3).toUpperCase()}{lvl > 0 ? ` ${lvl}` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Virus banners: intro / victoria */}
+          {virusBanner && (
+            <div style={{
+              position: 'fixed',
+              top: '32%',
+              left: 0,
+              width: '100%',
+              textAlign: 'center',
+              zIndex: 10001,
+              pointerEvents: 'none',
+              animation: 'virusBannerPop 0.4s ease-out',
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 'clamp(1.3rem, 5vw, 3rem)',
+                fontWeight: 900,
+                letterSpacing: '0.3em',
+                color: virusBanner === 'intro' ? '#ef4444' : '#22c55e',
+                animation: virusBanner === 'intro' ? 'virusGlitchText 0.6s steps(2) infinite' : 'none',
+                textShadow: virusBanner === 'intro'
+                  ? '0 0 25px rgba(239, 68, 68, 0.7), 3px 0 0 rgba(6, 182, 212, 0.7), -3px 0 0 rgba(240, 171, 222, 0.7)'
+                  : '0 0 25px rgba(34, 197, 94, 0.7)',
+              }}>
+                {virusBanner === 'intro' ? 'VIRUS DETECTADO' : 'SISTEMA RESTAURADO'}
+              </div>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 'clamp(0.5rem, 1.5vw, 0.7rem)',
+                letterSpacing: '0.2em',
+                color: '#94a3b8',
+                marginTop: '0.6rem',
+              }}>
+                {virusBanner === 'intro'
+                  ? 'CONTENIDO INFECTADO - DESTRUYE EL NUCLEO'
+                  : '+500 PTS - TODAS LAS SECCIONES REPARADAS'}
+              </div>
+            </div>
+          )}
+
+          {/* Derrota del virus: daño al 100% (pagina destruida) */}
+          {virusLost && (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 10002,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(10, 10, 26, 0.94)',
+              backdropFilter: 'blur(10px)',
+              pointerEvents: 'auto',
+              textAlign: 'center',
+              padding: '2rem',
+            }}>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: 'clamp(1.2rem, 4.5vw, 2.6rem)',
+                fontWeight: 900,
+                letterSpacing: '0.25em',
+                color: '#ef4444',
+                animation: 'virusGlitchText 0.5s steps(2) infinite',
+                marginBottom: '0.6rem',
+              }}>
+                PAGINA DESTRUIDA
+              </div>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '0.6rem',
+                letterSpacing: '0.18em',
+                color: '#94a3b8',
+                marginBottom: '0.4rem',
+              }}>
+                EL VIRUS CONSUMIO EL 100% DEL CONTENIDO
+              </div>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '1.5rem',
+                fontWeight: 800,
+                color: '#ef4444',
+                marginBottom: '0.3rem',
+                animation: 'critLabel 0.7s steps(2) infinite',
+              }}>
+                DAÑO 100%
+              </div>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '0.7rem',
+                color: '#94a3b8',
+                letterSpacing: '0.15em',
+                marginBottom: '1.6rem',
+              }}>
+                SCORE: {String(score).padStart(5, '0')} · BEST: {String(highScore).padStart(5, '0')}
+              </div>
+              <button
+                onClick={repairAndRetry}
+                style={{
+                  padding: '0.85rem 2.5rem',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontFamily: "'Orbitron', sans-serif",
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 30px rgba(16, 185, 129, 0.7)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.4)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                REPARAR Y REINTENTAR
+              </button>
+              <div style={{
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '0.5rem',
+                color: '#475569',
+                marginTop: '1.4rem',
+                letterSpacing: '0.1em',
+                maxWidth: '340px',
+                lineHeight: 1.9,
+              }}>
+                DESTRUYE EL NUCLEO ANTES DE QUE LA BARRA DE DAÑO LLEGUE AL 100%
+              </div>
+            </div>
+          )}
+
           {/* Game Over overlay */}
           {gameOver && (
             <div style={{ position: 'fixed', inset: 0, zIndex: 10001, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(10, 10, 26, 0.85)', backdropFilter: 'blur(8px)', pointerEvents: 'auto' }}>
@@ -1282,6 +2115,22 @@ export default function AsteroidShooter() {
         @keyframes orbit {
           0% { transform: translateX(-50%) rotate(0deg) translateY(-10px); }
           100% { transform: translateX(-50%) rotate(360deg) translateY(-10px); }
+        }
+        @keyframes virusBannerPop {
+          0% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes virusGlitchText {
+          0%, 100% { text-shadow: 0 0 25px rgba(239, 68, 68, 0.7), 3px 0 0 rgba(6, 182, 212, 0.7), -3px 0 0 rgba(240, 171, 222, 0.7); }
+          50% { text-shadow: 0 0 25px rgba(239, 68, 68, 0.7), -4px 0 0 rgba(6, 182, 212, 0.7), 4px 0 0 rgba(240, 171, 222, 0.7); }
+        }
+        @keyframes critBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @keyframes critLabel {
+          0%, 100% { opacity: 1; text-shadow: 0 0 10px rgba(239, 68, 68, 0.8); }
+          50% { opacity: 0.5; text-shadow: none; }
         }
       `}</style>
     </>

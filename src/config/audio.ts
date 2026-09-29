@@ -1,6 +1,14 @@
 import { ASSETS, DEFAULT_VOLUMES } from './assets';
 
-type AudioChannel = 'background' | 'shoot' | 'explosion' | 'gameOver';
+type AudioChannel =
+  | 'background'
+  | 'shoot'
+  | 'explosion'
+  | 'gameOver'
+  | 'virusSpawn'
+  | 'corrupt'
+  | 'repair'
+  | 'bossDeath';
 
 interface AudioState {
   /** Si el canal esta mutado */
@@ -11,15 +19,39 @@ interface AudioState {
 
 const STORAGE_KEY = 'space-portfolio-audio';
 
+function defaultMuted(): Record<AudioChannel, boolean> {
+  return {
+    background: false,
+    shoot: false,
+    explosion: false,
+    gameOver: false,
+    virusSpawn: false,
+    corrupt: false,
+    repair: false,
+    bossDeath: false,
+  };
+}
+
+function defaultVolumes(): Record<AudioChannel, number> {
+  return { ...DEFAULT_VOLUMES };
+}
+
 /** Carga estado guardado del audio */
 function loadState(): AudioState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Merge con defaults por si el guardado es de una version anterior
+      return {
+        muted: { ...defaultMuted(), ...(parsed.muted || {}) },
+        volumes: { ...defaultVolumes(), ...(parsed.volumes || {}) },
+      };
+    }
   } catch {}
   return {
-    muted: { background: false, shoot: false, explosion: false, gameOver: false },
-    volumes: { ...DEFAULT_VOLUMES },
+    muted: defaultMuted(),
+    volumes: defaultVolumes(),
   };
 }
 
@@ -40,7 +72,16 @@ class AudioManager {
     if (this.initialized) return;
     this.initialized = true;
 
-    const channels: AudioChannel[] = ['background', 'shoot', 'explosion', 'gameOver'];
+    const channels: AudioChannel[] = [
+      'background',
+      'shoot',
+      'explosion',
+      'gameOver',
+      'virusSpawn',
+      'corrupt',
+      'repair',
+      'bossDeath',
+    ];
 
     for (const channel of channels) {
       const src = ASSETS.audio[channel];
