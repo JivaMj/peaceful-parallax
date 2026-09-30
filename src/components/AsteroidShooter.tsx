@@ -508,6 +508,10 @@ export default function AsteroidShooter() {
     const shipImg = loadImage(ASSETS.ship, imgCacheRef.current);
     const asteroidImg = loadImage(ASSETS.asteroid, imgCacheRef.current);
     const projectileImg = loadImage(ASSETS.projectile, imgCacheRef.current);
+    const virusImg = loadImage(ASSETS.virus, imgCacheRef.current);
+    const minionImg = loadImage(ASSETS.minion, imgCacheRef.current);
+    const powerupShieldImg = loadImage(ASSETS.powerupShield, imgCacheRef.current);
+    const powerupLifeImg = loadImage(ASSETS.powerupLife, imgCacheRef.current);
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -1279,13 +1283,13 @@ export default function AsteroidShooter() {
               }
             }
 
-            drawMinion(ctx, m, frameRef.current);
+            drawMinion(ctx, m, frameRef.current, minionImg);
             return true;
           });
         }
 
         if (bossRef.current) {
-          drawBoss(ctx, bossRef.current, frameRef.current, ship.x, ship.y);
+          drawBoss(ctx, bossRef.current, frameRef.current, ship.x, ship.y, virusImg);
         }
       }
 
@@ -1324,7 +1328,12 @@ export default function AsteroidShooter() {
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
 
-        if (pu.type === 'shield') {
+        const puImg = pu.type === 'shield' ? powerupShieldImg : powerupLifeImg;
+        if (puImg && puImg.complete && puImg.naturalWidth > 0) {
+          // Icono personalizado (PNG/SVG), centrado
+          const size = 40;
+          ctx.drawImage(puImg, -size / 2, -size / 2, size, size);
+        } else if (pu.type === 'shield') {
           // Shield icon: hexagon
           ctx.beginPath();
           for (let i = 0; i < 6; i++) {

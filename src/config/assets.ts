@@ -18,10 +18,22 @@ export const ASSETS = {
   ship: null as string | null,
 
   /** Imagen de los asteroides. null = poligonos dibujados */
-  asteroid: null as string | null,
+  asteroid: '/images/asteroid.svg',
 
   /** Imagen del proyectil/disparo. null = circulo con brillo */
   projectile: null as string | null,
+
+  /** Imagen del boss virus. null = blob vectorial con espinas */
+  virus: null as string | null,
+
+  /** Imagen de los minions del virus. null = diamante vectorial */
+  minion: null as string | null,
+
+  /** Icono del powerup de escudo. null = hexagono vectorial */
+  powerupShield: null as string | null,
+
+  /** Icono del powerup de vida. null = corazon vectorial */
+  powerupLife: null as string | null,
 
   /** Iconos de habilidades (se usan en la seccion Skills) */
   icons: {

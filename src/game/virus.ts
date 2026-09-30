@@ -137,13 +137,16 @@ export function updateMinion(m: Minion, shipX: number, shipY: number) {
   m.rotation += 0.06;
 }
 
-/** Boss: blob toxico con espinas, ojo que sigue a la nave, cortes glitch y orbs de fase */
+/** Boss: blob toxico con espinas, ojo que sigue a la nave, cortes glitch y orbs de fase.
+ *  Si `img` esta cargada, se dibuja la imagen en vez del cuerpo vectorial
+ *  (aura, glitch, orbs, flash y etiqueta se mantienen encima). */
 export function drawBoss(
   ctx: CanvasRenderingContext2D,
   boss: Boss,
   frame: number,
   shipX: number,
-  shipY: number
+  shipY: number,
+  img?: HTMLImageElement | null
 ) {
   const color = PHASE_COLORS[boss.phase];
   const r = VIRUS_CONFIG.radius * (1 + Math.sin(boss.pulse) * 0.07);
@@ -161,58 +164,66 @@ export function drawBoss(
   ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2);
   ctx.fill();
 
-  // Espinas rotatorias
-  const spikes = 10;
-  ctx.fillStyle = `${color}cc`;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < spikes; i++) {
-    const a = boss.angle + (Math.PI * 2 * i) / spikes;
-    const len = r * 0.45 + Math.sin(frame * 0.12 + i * 1.7) * 8 + boss.phase * 3;
-    const half = 0.16;
+  const hasImg = !!(img && img.complete && img.naturalWidth > 0);
+
+  if (hasImg) {
+    // Cuerpo: imagen personalizada (siempre cuadrada, centrada)
+    const size = r * 2.6;
+    ctx.drawImage(img!, -size / 2, -size / 2, size, size);
+  } else {
+    // Espinas rotatorias
+    const spikes = 10;
+    ctx.fillStyle = `${color}cc`;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < spikes; i++) {
+      const a = boss.angle + (Math.PI * 2 * i) / spikes;
+      const len = r * 0.45 + Math.sin(frame * 0.12 + i * 1.7) * 8 + boss.phase * 3;
+      const half = 0.16;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - half) * r * 0.85, Math.sin(a - half) * r * 0.85);
+      ctx.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len));
+      ctx.lineTo(Math.cos(a + half) * r * 0.85, Math.sin(a + half) * r * 0.85);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Nucleo
+    const core = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    core.addColorStop(0, '#f8fafc');
+    core.addColorStop(0.3, color);
+    core.addColorStop(1, '#14532d');
+    ctx.fillStyle = core;
+    ctx.strokeStyle = '#0a0a1a';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a - half) * r * 0.85, Math.sin(a - half) * r * 0.85);
-    ctx.lineTo(Math.cos(a) * (r + len), Math.sin(a) * (r + len));
-    ctx.lineTo(Math.cos(a + half) * r * 0.85, Math.sin(a + half) * r * 0.85);
-    ctx.closePath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    // Ojo que mira a la nave
+    const eAngle = Math.atan2(shipY - boss.y, shipX - boss.x);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    ctx.ellipse(0, -2, r * 0.55, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0a0a1a';
+    ctx.beginPath();
+    ctx.arc(
+      Math.cos(eAngle) * r * 0.28,
+      -2 + Math.sin(eAngle) * r * 0.18,
+      r * 0.17,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    ctx.restore();
   }
-
-  // Nucleo
-  const core = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
-  core.addColorStop(0, '#f8fafc');
-  core.addColorStop(0.3, color);
-  core.addColorStop(1, '#14532d');
-  ctx.fillStyle = core;
-  ctx.strokeStyle = '#0a0a1a';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // Ojo que mira a la nave
-  const eAngle = Math.atan2(shipY - boss.y, shipX - boss.x);
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.ellipse(0, -2, r * 0.55, r * 0.3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#0a0a1a';
-  ctx.beginPath();
-  ctx.arc(
-    Math.cos(eAngle) * r * 0.28,
-    -2 + Math.sin(eAngle) * r * 0.18,
-    r * 0.17,
-    0,
-    Math.PI * 2
-  );
-  ctx.fill();
-  ctx.restore();
 
   // Cortes glitch
   if (frame % 19 < 3) {
@@ -260,29 +271,41 @@ export function drawBoss(
   ctx.restore();
 }
 
-/** Minion: diamante magenta con jitter glitch */
-export function drawMinion(ctx: CanvasRenderingContext2D, m: Minion, frame: number) {
+/** Minion: diamante magenta con jitter glitch. Imagen opcional con fallback vectorial */
+export function drawMinion(
+  ctx: CanvasRenderingContext2D,
+  m: Minion,
+  frame: number,
+  img?: HTMLImageElement | null
+) {
   const jx = Math.sin(frame * 0.6 + m.id) * 2;
   ctx.save();
   ctx.translate(m.x + jx, m.y);
   ctx.rotate(m.rotation);
   ctx.shadowColor = '#f0abfc';
   ctx.shadowBlur = 10;
-  ctx.fillStyle = 'rgba(240, 171, 222, 0.25)';
-  ctx.strokeStyle = '#f0abfc';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.lineTo(8, 0);
-  ctx.lineTo(0, 10);
-  ctx.lineTo(-8, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ef4444';
-  ctx.beginPath();
-  ctx.arc(0, 0, 3, 0, Math.PI * 2);
-  ctx.fill();
+
+  const hasImg = !!(img && img.complete && img.naturalWidth > 0);
+  if (hasImg) {
+    const size = VIRUS_CONFIG.minionRadius * 2.6;
+    ctx.drawImage(img!, -size / 2, -size / 2, size, size);
+  } else {
+    ctx.fillStyle = 'rgba(240, 171, 222, 0.25)';
+    ctx.strokeStyle = '#f0abfc';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(8, 0);
+    ctx.lineTo(0, 10);
+    ctx.lineTo(-8, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }

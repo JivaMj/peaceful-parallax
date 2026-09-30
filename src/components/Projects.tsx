@@ -80,7 +80,6 @@ export default function Projects() {
             borderRadius: '12px',
             padding: isMobile ? '0.75rem' : '1rem 0.75rem',
             position: 'relative',
-            order: isMobile ? 0 : 0,
             ...(isMobile ? { overflowX: 'auto', WebkitOverflowScrolling: 'touch' } : {}),
           }}>
             {!isMobile && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent, #7c3aed, transparent)' }} />}
@@ -149,7 +148,6 @@ export default function Projects() {
             position: 'relative',
             overflow: 'hidden',
             minHeight: isMobile ? 'auto' : '450px',
-            order: isMobile ? 1 : 1,
           }}>
             {/* Top HUD bar */}
             <div style={{
@@ -213,7 +211,7 @@ export default function Projects() {
               {/* Project visual: image or ID placeholder */}
               <div style={{
                 width: '100%',
-                height: '200px',
+                height: '240px',
                 background: `linear-gradient(135deg, ${project.color}10, ${project.color}05)`,
                 border: `1px solid ${project.color}20`,
                 borderRadius: '12px',
